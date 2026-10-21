@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verificar certificado — Mundo Dictariano</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    background: #0B2530;
+    color: #1B3A4B;
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .card {
+    background: #FFFFFF;
+    border-radius: 16px;
+    max-width: 480px;
+    width: 100%;
+    padding: 32px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+  }
+  h1 {
+    font-size: 22px;
+    margin: 0 0 6px;
+    color: #1B3A4B;
+  }
+  p.sub {
+    margin: 0 0 24px;
+    color: #5C7A82;
+    font-size: 14px;
+  }
+  label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #1B3A4B;
+  }
+  input[type="file"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px dashed #A9C7C2;
+    border-radius: 8px;
+    background: #F4FAF9;
+    font-size: 13px;
+  }
+  .endpoint {
+    margin-top: 14px;
+  }
+  .endpoint input[type="text"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #D6E6E3;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #5C7A82;
+  }
+  button {
+    margin-top: 20px;
+    width: 100%;
+    background: #028090;
+    color: #fff;
+    border: none;
+    padding: 13px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { background: #026e7c; }
+  button:disabled { background: #A9C7C2; cursor: not-allowed; }
+  #resultado {
+    margin-top: 22px;
+    padding: 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.5;
+    display: none;
+    white-space: pre-wrap;
+  }
+  #resultado.ok {
+    background: #E6F7F1;
+    border: 1px solid #02C39A;
+    color: #045A45;
+    display: block;
+  }
+  #resultado.fail {
+    background: #FDECEC;
+    border: 1px solid #E57373;
+    color: #7A1F1F;
+    display: block;
+  }
+  #resultado.loading {
+    background: #F4FAF9;
+    border: 1px solid #D6E6E3;
+    color: #5C7A82;
+    display: block;
+  }
+  code { font-size: 12px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Verificar certificado</h1>
+    <p class="sub">Sube el PDF del certificado para comprobar su autenticidad contra el servidor local.</p>
+
+    <form id="form-verificar">
+      <label for="pdf">Archivo PDF del certificado</label>
+      <input type="file" id="pdf" name="pdf" accept="application/pdf" required>
+
+      <div class="endpoint">
+        <label for="endpoint">Endpoint del servidor</label>
+        <input type="text" id="endpoint" value="http://localhost:3005/verificar">
+      </div>
+
+      <button type="submit" id="btn-verificar">Verificar certificado</button>
+    </form>
+
+    <div id="resultado"></div>
+  </div>
+
+<script>
+  const form = document.getElementById('form-verificar');
+  const resultado = document.getElementById('resultado');
+  const btn = document.getElementById('btn-verificar');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const archivo = document.getElementById('pdf').files[0];
+    const endpoint = document.getElementById('endpoint').value.trim();
+
+    if (!archivo) return;
+
+    resultado.className = 'loading';
+    resultado.style.display = 'block';
+    resultado.textContent = 'Verificando…';
+    btn.disabled = true;
+
+    try {
+      const formData = new FormData();
+      formData.append('pdf', archivo);
+
+      const respuesta = await fetch(endpoint, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!respuesta.ok) {
+        throw new Error(`El servidor respondió con estado ${respuesta.status}`);
+      }
+
+      const datos = await respuesta.json();
+
+      if (datos.valido) {
+        const c = datos.certificado || {};
+        resultado.className = 'ok';
+        resultado.textContent =
+          '✅ Certificado auténtico\n\n' +
+          `Nombre: ${c.nombre || '-'}\n` +
+          `Curso: ${c.curso || '-'}\n` +
+          `Fecha: ${c.fecha || '-'}\n` +
+          `ID: ${c.id || '-'}\n\n` +
+          `Confirmado en blockchain: ${datos.confirmadoEnBlockchain ? 'Sí' : 'Aún no (puede tardar horas)'}`;
+      } else {
+        resultado.className = 'fail';
+        resultado.textContent = '❌ No se pudo verificar\n\n' + (datos.motivo || 'El certificado no coincide con ningún registro.');
+      }
+    } catch (err) {
+      resultado.className = 'fail';
+      resultado.textContent =
+        '⚠️ Error al conectar con el servidor\n\n' + err.message +
+        '\n\nVerifica que "node verify-server.js" esté corriendo y que el endpoint sea correcto.';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
